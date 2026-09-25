@@ -115,6 +115,7 @@ Two distinct GenAI applications are demonstrated:
 Four-page dashboard specification — Executive Overview, Machine Health Analysis, Failure
 Analysis, Predictive Maintenance — with recommended visuals, DAX measures, slicers, and
 drill-through behavior. See `POWERBI_DASHBOARD.md`.
+👉 **[Open the live dashboard](https://shashanksingh1717.github.io/genai-predictive-maintenance-analytics/)**
 
 ## Key Insights
 
