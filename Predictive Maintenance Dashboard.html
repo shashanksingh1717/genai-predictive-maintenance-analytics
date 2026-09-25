@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Predictive Maintenance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --text:#1a2233; --muted:#5b6577; --border:#e3e7ee;
+  --accent:#4C72B0; --accent2:#DD8452; --accent3:#55A868; --danger:#C44E52;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12151c; --card:#1b2029; --text:#e8ebf0; --muted:#9aa4b5; --border:#2a3040;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12151c; --card:#1b2029; --text:#e8ebf0; --muted:#9aa4b5; --border:#2a3040;
+}
+*{box-sizing:border-box;}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,sans-serif;}
+header{position:sticky;top:0;padding:14px 20px calc(14px + env(safe-area-inset-top,0px));background:var(--card);border-bottom:1px solid var(--border);z-index:10;}
+header h1{margin:0 0 2px;font-size:18px;}
+header p{margin:0;color:var(--muted);font-size:12.5px;}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:56px;z-index:9;}
+nav button{flex:0 0 auto;padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;white-space:nowrap;}
+nav button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+main{max-width:1080px;margin:0 auto;padding:18px 16px 40px;}
+.page{display:none;}
+.page.active{display:block;animation:fade .25s ease;}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px;}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.kpi .v{font-size:24px;font-weight:700;}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:2px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media (max-width:700px){.grid{grid-template-columns:1fr;}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px;overflow-x:auto;}
+.card h3{margin:0 0 10px;font-size:14px;}
+.card p.note{font-size:12px;color:var(--muted);margin:8px 0 0;}
+table{border-collapse:collapse;width:100%;font-size:12.5px;}
+th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);}
+th{color:var(--muted);font-weight:600;}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.pill.red{background:rgba(196,78,82,.15);color:var(--danger);}
+.pill.amber{background:rgba(221,132,82,.18);color:var(--accent2);}
+.pill.green{background:rgba(85,168,104,.18);color:var(--accent3);}
+select{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;}
+canvas{max-width:100%;}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙️ Predictive Maintenance Dashboard</h1>
+  <p>10,000 machines · 351 failures · live from cleaned sensor dataset</p>
+</header>
+<nav id="tabs">
+  <button data-p="overview" class="active">Executive Overview</button>
+  <button data-p="health">Machine Health</button>
+  <button data-p="failure">Failure Analysis</button>
+  <button data-p="predictive">Predictive Maintenance</button>
+</nav>
+<main>
+
+  <section class="page active" id="overview">
+    <div class="kpis">
+      <div class="kpi"><div class="v">10,000</div><div class="l">Total Machines</div></div>
+      <div class="kpi"><div class="v">351</div><div class="l">Total Failures</div></div>
+      <div class="kpi"><div class="v" style="color:var(--danger)">3.51%</div><div class="l">Overall Failure Rate</div></div>
+      <div class="kpi"><div class="v">4.07%</div><div class="l">Type‑1 (Low) Failure Rate</div></div>
+      <div class="kpi"><div class="v">2.39%</div><div class="l">Type‑3 (High) Failure Rate</div></div>
+      <div class="kpi"><div class="v">0.946</div><div class="l">Best Model ROC‑AUC</div></div>
+    </div>
+    <div class="grid">
+      <div class="card"><h3>Failure Rate by Machine Type</h3><canvas id="cType"></canvas>
+        <p class="note">Type‑1 (low‑duty) fails 70% more often than Type‑3 — not explained by higher torque load.</p></div>
+      <div class="card"><h3>Failure Category Breakdown</h3><canvas id="cCats"></canvas>
+        <p class="note">Categories 2 & 3 together make up 59% of all failures.</p></div>
+    </div>
+  </section>
+
+  <section class="page" id="health">
+    <div class="grid">
+      <div class="card"><h3>Torque vs Rotational Speed <span style="color:var(--muted);font-weight:400">(300‑pt sample, red = failed)</span></h3><canvas id="cScatter"></canvas></div>
+      <div class="card"><h3>Random Forest Feature Importance</h3><canvas id="cImp"></canvas></div>
+    </div>
+    <div class="card"><h3>Failure Rate by Tool‑Wear Quartile</h3><canvas id="cWear"></canvas>
+      <p class="note">Risk is flat (~2.3%) across the bottom three quartiles, then triples to 7.16% in the top quartile — a cliff, not a ramp.</p></div>
+  </section>
+
+  <section class="page" id="failure">
+    <div class="grid">
+      <div class="card"><h3>Failure Rate by Operating‑Condition Segment</h3><canvas id="cSeg"></canvas>
+        <p class="note">Low‑Speed/High‑Torque machines fail at 10.2% — over 11× the rate of "Normal" operating conditions.</p></div>
+      <div class="card"><h3>Failure Category Breakdown</h3><canvas id="cCats2"></canvas></div>
+    </div>
+    <div class="card"><h3>Top Failure Categories</h3>
+      <table><thead><tr><th>Failure Code</th><th>Occurrences</th><th>% of All Failures</th></tr></thead>
+      <tbody id="failTable"></tbody></table>
+    </div>
+  </section>
+
+  <section class="page" id="predictive">
+    <div class="card">
+      <h3>Model Comparison — select training data</h3>
+      <select id="regimeSelect">
+        <option value="Baseline">Baseline (imbalanced)</option>
+        <option value="SMOTE">SMOTE‑balanced</option>
+        <option value="CTGAN">CTGAN‑augmented (Generative AI)</option>
+      </select>
+      <canvas id="cModel" style="margin-top:12px;"></canvas>
+      <p class="note" id="modelNote"></p>
+    </div>
+    <div class="card"><h3>Maintenance Priority — example high‑risk machines</h3>
+      <table><thead><tr><th>Machine Type</th><th>Failure Code</th><th>Tool Wear (z)</th><th>Torque (z)</th><th>Priority</th></tr></thead>
+      <tbody id="riskTable"></tbody></table>
+    </div>
+  </section>
+
+</main>
+<script>
+Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--muted');
+Chart.defaults.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border');
+const C1='#4C72B0',C2='#DD8452',C3='#55A868',CR='#C44E52';
+
+document.getElementById('tabs').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById(b.dataset.p).classList.add('active');
+});
+
+new Chart(document.getElementById('cType'), {type:'bar',
+  data:{labels:['Type 1 (L)','Type 2 (M)','Type 3 (H)'],
+  datasets:[{label:'Failure Rate %',data:[4.07,2.77,2.39],backgroundColor:[C1,C2,C3]}]},
+  options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'%'}}}}});
+
+const catLabels=['1','2','3','4','5','6'], catData=[3,91,115,78,18,46];
+function catsChart(id){
+  new Chart(document.getElementById(id), {type:'bar',
+  data:{labels:catLabels,datasets:[{label:'Occurrences',data:catData,backgroundColor:CR}]},
+  options:{plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Failure Category Code'}}}}});
+}
+catsChart('cCats'); catsChart('cCats2');
+
+const pts = [[-0.004,-0.39,0],[-0.657,0.483,0],[-0.3,0.202,0],[0.297,-0.631,0],[1.82,-1.614,0],[-0.791,0.593,1],[-0.551,1.115,0],[-1.137,1.115,0],[0.442,-0.38,0],[-0.021,-0.54,0],[-0.462,0.062,0],[0.938,-0.641,0],[-0.796,-0.179,0],[-0.244,-0.32,0],[-0.663,0.593,0],[-0.378,-0.209,0],[-1.103,0.924,0],[-0.484,0.553,0],[0.096,-0.229,0],[-0.774,0.082,0],[0.442,-0.49,0],[-0.54,0.653,0],[-0.579,0.011,0],[0.28,-0.581,0],[-0.802,1.396,0],[-0.495,0.393,0],[-0.891,0.332,0],[-0.947,1.456,0],[1.251,-1.413,0],[-0.534,0.352,0],[-0.116,-0.751,0],[-0.512,0.312,0],[-0.155,0.573,0],[0.09,-0.661,0],[-1.192,1.225,0],[0.141,-0.591,0],[-1.343,1.757,0],[-0.406,0.262,0],[-0.021,0.182,0],[-0.696,0.934,0],[0.007,-1.112,0],[-0.484,0.864,0],[-1.036,2.258,0],[0.163,-0.711,0],[-0.328,-0.189,0],[-1.053,1.255,0],[0.877,-0.932,0],[-0.869,0.573,0],[0.81,-0.691,0],[-0.467,-0.019,0],[1.223,-1.564,0],[0.626,-0.671,0],[1.563,-1.634,0],[0.62,-0.621,0],[-0.512,0.292,0],[0.793,-0.871,0],[0.704,-0.861,0],[-0.601,0.954,0],[0.012,-0.37,0],[0.001,0.543,0],[-1.114,1.215,0],[0.353,-0.41,0],[-0.333,0.332,0],[-0.233,0.683,0],[-0.105,0.503,0],[-0.506,0.633,0],[0.983,-1.223,0],[0.302,-0.49,0],[-0.244,0.082,0],[0.219,-0.952,0],[-0.78,0.844,0],[0.224,-0.591,0],[-0.545,0.633,0],[1.083,-1.523,0],[-0.657,0.984,0],[-1.042,1.215,0],[0.102,0.112,0],[0.899,-1.132,0],[0.609,-1.092,0],[0.118,-0.671,0],[-0.099,-0.179,0],[-0.506,0.894,0],[-0.791,0.714,0],[-0.183,0.082,0],[0.085,0.774,0],[-0.69,0.352,0],[0.213,0.834,0],[-0.283,-0.43,0],[-0.216,-0.009,0],[0.051,-0.781,0],[0.604,-1.253,0],[-0.596,0.583,0],[-0.462,0.122,0],[0.146,-0.049,0],[-0.027,0.252,0],[-0.902,0.734,1],[0.314,-0.801,0],[0.224,-0.45,0],[-0.289,-0.31,0],[0.079,-0.34,0],[-1.126,1.657,0],[-0.406,-0.049,0],[3.867,-2.326,0],[-0.155,-0.43,0],[-0.166,0.252,0],[-0.35,0.784,0],[-0.121,0.443,0],[-0.512,-0.32,0],[-0.428,0.282,0],[-0.333,0.072,0],[-0.038,-0.119,0],[-0.674,-0.199,0],[-0.11,-0.069,0],[-0.852,2.238,1],[0.219,-0.44,0],[-0.188,0.122,0],[0.386,-0.49,0],[-1.153,1.396,0],[1.206,-1.363,0],[-1.159,2.87,1],[0.626,-1.192,0],[-0.941,1.035,0],[-0.328,0.092,0],[-0.105,-0.239,0],[-1.416,2.268,1],[-0.138,-0.53,0],[0.369,-0.581,0],[-1.131,1.827,1],[-0.612,1.055,0],[1.251,-1.433,0],[0.42,-0.841,0],[-0.367,0.603,0],[0.141,-0.249,0],[-0.261,0.082,0],[1.652,-1.634,0],[-0.133,0.383,0],[0.202,-0.47,0],[-0.635,0.513,0],[-0.2,-0.37,0],[-0.707,0.553,0],[-0.4,0.072,0],[-0.674,0.774,0],[0.007,-0.34,0],[0.704,-0.751,0],[0.286,-0.209,0],[-1.003,1.346,0],[0.152,-0.34,0],[-0.808,0.774,0],[0.994,-1.273,0],[1.251,-1.273,0],[0.174,-0.169,0],[-0.59,0.262,0],[-0.657,1.205,0],[-0.317,0.212,0],[-0.194,0.483,0],[-1.042,2.359,0],[-0.651,0.804,1],[1.446,-1.453,0],[-0.813,0.252,0],[1.005,-0.811,0],[0.86,-0.992,0],[0.09,0.062,0],[1.178,-1.172,0],[0.102,-0.761,0],[0.079,-0.32,0],[-0.523,0.854,0],[0.503,-0.741,0],[0.04,-0.199,0],[1.011,-1.213,0],[0.743,-0.952,0],[-0.3,-0.4,0],[0.91,-1.333,0],[-0.105,0.593,0],[0.598,-0.932,0],[-0.099,-0.179,0],[1.106,-1.253,0],[-1.075,1.325,0],[-0.239,0.473,0],[2.015,-1.564,0],[-0.451,0.342,0],[-0.306,0.493,0],[0.219,0.212,0],[-0.462,0.543,0],[-0.646,-0.32,0],[0.888,-1.002,0],[-0.467,0.804,0],[-0.729,0.533,0],[-0.992,1.386,0],[-0.4,0.724,0],[-0.557,0.643,0],[-0.428,0.513,0],[-0.06,-0.3,0],[0.397,-0.079,0],[-1.605,1.998,0],[-0.596,0.362,0],[0.001,-0.099,0],[1.931,-1.483,0],[-0.958,1.125,0],[0.163,-0.49,0],[-0.356,0.041,0],[-0.618,1.336,0],[-1.192,2.248,1],[-0.663,2.399,1],[-0.707,0.894,0],[0.051,-0.31,0],[-0.423,-0.5,0],[1.781,-1.373,0],[2.149,-1.945,0],[-0.161,0.062,0],[-0.478,0.413,0],[-0.635,0.533,0],[-0.339,0.192,0],[-0.049,-0.34,0],[-0.406,0.463,0],[2.02,-1.754,0],[-0.997,0.804,0],[0.342,-0.4,0],[3.794,-2.336,0],[-0.417,0.102,0],[-0.172,0.122,0],[-0.378,0.724,0],[-0.679,0.764,0],[-0.518,0.734,0],[-0.144,0.292,0],[-0.211,1.004,0],[-0.646,0.623,0],[-0.534,1.336,0],[-1.059,1.275,0],[-0.707,0.413,0],[0.626,-1.303,0],[-0.78,0.764,0],[-0.244,-0.219,0],[-0.311,0.051,0],[1.373,-1.453,0],[-0.518,0.322,0],[-0.121,-0.4,0],[-1.053,1.566,0],[-1.209,1.396,0],[0.18,-0.641,0],[-1.059,0.894,0],[-0.49,0.904,0],[-0.49,-0.029,0],[-0.523,0.994,0],[-0.757,1.566,0],[-0.964,1.907,0],[-0.612,-0.229,1],[-1.064,1.486,0],[0.514,-1.172,0],[0.28,-0.952,0],[0.146,-0.109,0],[1.468,-1.564,0],[1.05,-1.293,0],[-0.372,0.202,0],[-0.25,-0.049,0],[0.135,-0.52,0],[-1.047,2.208,0],[-1.36,1.717,0],[-0.3,0.242,0],[0.821,-1.112,0],[-0.272,0.814,0],[-0.161,-0.27,0],[-0.953,0.744,0],[-0.557,-0.149,0],[-0.841,1.325,0],[0.844,-1.443,0],[1.708,-1.814,0],[0.514,-0.51,0],[0.353,-0.581,0],[-0.121,-0.239,0],[3.778,-2.326,0],[-0.372,-0.029,0],[0.035,-0.57,0],[0.369,-1.062,0],[1.067,-0.982,0],[0.046,-0.741,0],[0.157,-0.49,0],[-1.265,1.145,0],[0.029,-0.53,0],[-0.244,0.102,0],[-0.116,-0.129,0],[-0.239,-0.821,0],[-0.668,0.523,0],[1.267,-1.423,0],[-0.835,0.964,0],[-0.518,0.583,0],[-0.858,1.075,0],[-1.382,2.369,0],[5.635,-2.707,1],[-0.166,0.663,0],[0.135,-0.099,0],[0.431,-0.601,0],[-0.261,1.235,0],[-0.501,0.884,0],[0.063,-0.631,0],[1.518,-1.684,0],[-0.127,0.603,0],[0.364,-0.831,0],[-1.008,0.814,0],[-0.902,0.854,0],[-0.283,0.774,0]];
+new Chart(document.getElementById('cScatter'), {type:'scatter',
+  data:{datasets:[
+    {label:'No Failure',data:pts.filter(p=>p[2]===0).map(p=>({x:p[0],y:p[1]})),backgroundColor:'rgba(76,114,176,.5)',pointRadius:3},
+    {label:'Failure',data:pts.filter(p=>p[2]===1).map(p=>({x:p[0],y:p[1]})),backgroundColor:CR,pointRadius:5}
+  ]},
+  options:{scales:{x:{title:{display:true,text:'Rotational Speed (z)'}},y:{title:{display:true,text:'Torque (z)'}}}}});
+
+new Chart(document.getElementById('cImp'), {type:'bar',
+  data:{labels:['Rotational Speed','Torque','Tool Wear','Air Temp','Process Temp','Type'],
+  datasets:[{label:'Importance',data:[0.263,0.203,0.183,0.169,0.158,0.025],backgroundColor:C1}]},
+  options:{indexAxis:'y',plugins:{legend:{display:false}}}});
+
+new Chart(document.getElementById('cWear'), {type:'bar',
+  data:{labels:['Q1 (lowest wear)','Q2','Q3','Q4 (highest wear)'],
+  datasets:[{label:'Failure Rate %',data:[2.28,2.40,2.20,7.16],backgroundColor:[C1,C1,C1,CR]}]},
+  options:{plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'%'}}}}});
+
+new Chart(document.getElementById('cSeg'), {type:'bar',
+  data:{labels:['Low‑Speed / High‑Torque','High‑Speed / Low‑Torque','Normal Range'],
+  datasets:[{label:'Failure Rate %',data:[10.20,2.08,0.89],backgroundColor:[CR,C2,C3]}]},
+  options:{plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'%'}}}}});
+
+const failTotal = catData.reduce((a,b)=>a+b,0);
+document.getElementById('failTable').innerHTML = catLabels.map((c,i)=>
+  `<tr><td>${c}</td><td>${catData[i]}</td><td>${(catData[i]/failTotal*100).toFixed(1)}%</td></tr>`).join('');
+
+const riskRows=[
+ ['Type 2','6',2.28,1.49,'red'],['Type 1','4',2.25,0.63,'red'],['Type 3','6',2.17,0.76,'red'],
+ ['Type 3','4',2.17,1.39,'red'],['Type 1','4',2.04,0.89,'amber']
+];
+document.getElementById('riskTable').innerHTML = riskRows.map(r=>
+ `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td><span class="pill ${r[4]}">${r[4]==='red'?'High':'Medium'}</span></td></tr>`).join('');
+
+const modelData = {
+ Baseline:{acc:0.985,prec:0.896,rec:0.612,f1:0.727,auc:0.946,note:'Best balanced model — high precision, but misses 38.8% of real failures.'},
+ SMOTE:{acc:0.928,prec:0.277,rec:0.745,f1:0.403,auc:0.923,note:'Catches more failures (74.5%) at the cost of far more false alarms.'},
+ CTGAN:{acc:0.774,prec:0.118,rec:0.908,f1:0.208,auc:0.933,note:'Generative‑AI (CTGAN) synthetic training data pushes recall to 90.8% — catches nearly all real failures, but ~1 in 8 flagged machines is a false alarm. ROC‑AUC barely moves (0.92–0.95 across all regimes) — the model isn’t “smarter”, the decision threshold just shifted.'}
+};
+let modelChart;
+function renderModel(regime){
+  const d = modelData[regime];
+  document.getElementById('modelNote').textContent = d.note;
+  const cfg = {labels:['Accuracy','Precision','Recall','F1','ROC-AUC'],
+    datasets:[{label:regime+' — Random Forest',data:[d.acc,d.prec,d.rec,d.f1,d.auc],backgroundColor:C1}]};
+  if(modelChart){modelChart.data=cfg; modelChart.update();}
+  else{modelChart = new Chart(document.getElementById('cModel'), {type:'bar',data:cfg,
+    options:{plugins:{legend:{display:false}},scales:{y:{min:0,max:1}}}});}
+}
+document.getElementById('regimeSelect').addEventListener('change', e=>renderModel(e.target.value));
+renderModel('Baseline');
+</script>
+</body>
+</html>
